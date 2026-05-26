@@ -8,6 +8,8 @@ import { GrammarService } from './reference/grammar.service';
 import { OpenAILLMClient } from './llm/openai.client';
 import { PromptVocabGenerator } from './llm/prompt-vocab-generator';
 import { CorrectionService } from './correction/correction.service';
+import { ExposuresService } from './memory/exposures.service';
+import { MistakesService } from './memory/mistakes.service';
 import { StartHandler } from './bot/handlers/start.handler';
 import { ScenarioHandler } from './bot/handlers/scenario.handler';
 import { MessageHandler } from './bot/handlers/message.handler';
@@ -25,10 +27,12 @@ async function main() {
   const vocab = new VocabService(db);
   const grammar = new GrammarService(db);
   const correction = new CorrectionService(llm);
+  const exposures = new ExposuresService(db);
+  const mistakes = new MistakesService(db);
 
   const start = new StartHandler(sessions);
-  const scenario = new ScenarioHandler(sessions, vocab, grammar, generator);
-  const message = new MessageHandler(sessions, vocab, grammar, correction, generator);
+  const scenario = new ScenarioHandler(sessions, vocab, grammar, generator, exposures);
+  const message = new MessageHandler(sessions, vocab, grammar, correction, generator, exposures, mistakes);
   const hint = new HintHandler(llm, sessions);
 
   const bot = createBot(config, { start, scenario, message, hint });

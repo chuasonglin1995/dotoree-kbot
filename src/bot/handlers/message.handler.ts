@@ -6,6 +6,9 @@ import { findScenario } from '../../reference/scenarios';
 import { CorrectionService } from '../../correction/correction.service';
 import { VocabConstrainedGenerator } from '../../llm/vocab-generator.interface';
 import { formatKoWithSpoilerEn, escapeMdV2, hintKeyboard } from '../formatting';
+import { ExposuresService } from '../../memory/exposures.service';
+import { MistakesService } from '../../memory/mistakes.service';
+import { extractLemmaCandidates } from '../../memory/morphology';
 
 export class MessageHandler {
   constructor(
@@ -14,6 +17,8 @@ export class MessageHandler {
     private readonly grammar: GrammarService,
     private readonly correction: CorrectionService,
     private readonly generator: VocabConstrainedGenerator,
+    private readonly exposures: ExposuresService,
+    private readonly mistakes: MistakesService,
   ) {}
 
   async handle(ctx: Context, text: string) {
@@ -57,6 +62,12 @@ export class MessageHandler {
       bot_followup_ko: followup.textKo,
       bot_followup_en: followup.textEn,
     });
+
+    const lemmas = [...extractLemmaCandidates(text), ...extractLemmaCandidates(followup.textKo)];
+    await this.exposures.recordExposure(user.id, lemmas);
+    if (correction.mistakes.length > 0) {
+      await this.mistakes.recordAll(user.id, turn.id, correction.mistakes);
+    }
 
     // 4. Reply
     const correctionBlock = correction.mistakes.length === 0

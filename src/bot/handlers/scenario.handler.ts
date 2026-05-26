@@ -5,6 +5,8 @@ import { GrammarService } from '../../reference/grammar.service';
 import { findScenario } from '../../reference/scenarios';
 import { VocabConstrainedGenerator } from '../../llm/vocab-generator.interface';
 import { formatKoWithSpoilerEn, hintKeyboard } from '../formatting';
+import { ExposuresService } from '../../memory/exposures.service';
+import { extractLemmaCandidates } from '../../memory/morphology';
 
 export class ScenarioHandler {
   constructor(
@@ -12,6 +14,7 @@ export class ScenarioHandler {
     private readonly vocab: VocabService,
     private readonly grammar: GrammarService,
     private readonly generator: VocabConstrainedGenerator,
+    private readonly exposures: ExposuresService,
   ) {}
 
   async handle(ctx: Context, scenarioId: string) {
@@ -38,6 +41,9 @@ export class ScenarioHandler {
       bot_followup_ko: opener.textKo,
       bot_followup_en: opener.textEn,
     });
+
+    const lemmas = extractLemmaCandidates(opener.textKo);
+    await this.exposures.recordExposure(user.id, lemmas);
 
     await ctx.reply(formatKoWithSpoilerEn(opener.textKo, opener.textEn), {
       parse_mode: 'MarkdownV2',

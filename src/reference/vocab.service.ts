@@ -8,7 +8,7 @@ export class VocabService {
     const { data, error } = await this.db
       .from('vocab').select('*')
       .lte('topik_level', maxTopikLevel)
-      .contains('scenarios', [scenario]);
+      .or(`scenarios.cs.["${scenario}"],scenarios.cs.["general"],scenarios.cs.["daily_life"]`);
     if (error) throw error;
     return (data ?? []) as VocabRow[];
   }

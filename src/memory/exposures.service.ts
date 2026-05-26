@@ -11,9 +11,21 @@ export class ExposuresService {
     if (error) throw error;
     if (!vocabRows || vocabRows.length === 0) return;
 
+    const vocabIds = vocabRows.map((v: any) => v.id);
+    const { data: existing, error: exErr } = await this.db
+      .from('exposures').select('vocab_id, exposure_count')
+      .eq('user_id', userId).in('vocab_id', vocabIds);
+    if (exErr) throw exErr;
+    const existingMap = new Map<number, number>(
+      (existing ?? []).map((e: any) => [e.vocab_id, e.exposure_count]),
+    );
+
     const now = new Date().toISOString();
     const upserts = vocabRows.map((v: any) => ({
-      user_id: userId, vocab_id: v.id, exposure_count: 1, last_seen_at: now,
+      user_id: userId,
+      vocab_id: v.id,
+      exposure_count: (existingMap.get(v.id) ?? 0) + 1,
+      last_seen_at: now,
     }));
     const { error: upErr } = await this.db
       .from('exposures').upsert(upserts, { onConflict: 'user_id,vocab_id' });

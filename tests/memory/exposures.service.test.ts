@@ -15,7 +15,13 @@ function makeDb() {
         }),
       };
     }
+    // 'exposures' table — support both .select().eq().in() and .upsert()
     return {
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          in: jest.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      }),
       upsert: jest.fn((rows: any) => {
         upserted.push(rows);
         return Promise.resolve({ error: null });

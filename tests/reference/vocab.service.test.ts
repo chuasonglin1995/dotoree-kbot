@@ -6,7 +6,7 @@ function makeFakeClient(rows: VocabRow[]) {
     from: jest.fn().mockReturnValue({
       select: jest.fn().mockReturnValue({
         lte: jest.fn().mockReturnValue({
-          contains: jest.fn().mockResolvedValue({ data: rows, error: null }),
+          or: jest.fn().mockResolvedValue({ data: rows, error: null }),
         }),
       }),
     }),

@@ -2,7 +2,9 @@
   "name": "dotoree-kbot",
   "version": "1.0.0",
   "description": "🌰 Small bot, big dreams. Dotoree Kbot helps you learn Korean through Telegram — because consistency beats cramming.",
-  "main": "index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "directories": {
     "doc": "docs"
   },

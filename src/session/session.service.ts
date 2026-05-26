@@ -28,7 +28,7 @@ export class SessionService {
       .order('turn_number', { ascending: false }).limit(1).maybeSingle();
     const next = (existing?.turn_number ?? 0) + 1;
     const { data, error } = await this.db
-      .from('turns').insert({ session_id: sessionId, turn_number: next, ...turn })
+      .from('turns').insert({ session_id: sessionId, ...turn, turn_number: next })
       .select().single();
     if (error) throw error;
     return data as TurnRow;
@@ -43,15 +43,17 @@ export class SessionService {
   }
 
   async lastTurn(sessionId: string): Promise<TurnRow | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from('turns').select('*').eq('session_id', sessionId)
       .order('turn_number', { ascending: false }).limit(1).maybeSingle();
+    if (error) throw error;
     return (data ?? null) as TurnRow | null;
   }
 
   async getTurn(turnId: string): Promise<TurnRow | null> {
-    const { data } = await this.db
+    const { data, error } = await this.db
       .from('turns').select('*').eq('id', turnId).maybeSingle();
+    if (error) throw error;
     return (data ?? null) as TurnRow | null;
   }
 

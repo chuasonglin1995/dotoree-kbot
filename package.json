@@ -1,0 +1,46 @@
+{
+  "name": "dotoree-kbot",
+  "version": "1.0.0",
+  "description": "🌰 Small bot, big dreams. Dotoree Kbot helps you learn Korean through Telegram — because consistency beats cramming.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsc -p tsconfig.json",
+    "test": "jest",
+    "seed": "tsx seeds/seed.ts",
+    "smoke:vocab": "tsx scripts/smoke-vocab-generator.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chuasonglin1995/dotoree-kbot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/chuasonglin1995/dotoree-kbot/issues"
+  },
+  "homepage": "https://github.com/chuasonglin1995/dotoree-kbot#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.8.5",
+    "node-cron": "^4.2.1",
+    "openai": "^6.39.0",
+    "telegraf": "^4.16.3"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.9.1",
+    "@types/node-cron": "^3.0.11",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3"
+  }
+}

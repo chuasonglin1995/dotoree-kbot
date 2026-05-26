@@ -10,6 +10,8 @@ import { PromptVocabGenerator } from './llm/prompt-vocab-generator';
 import { CorrectionService } from './correction/correction.service';
 import { ExposuresService } from './memory/exposures.service';
 import { MistakesService } from './memory/mistakes.service';
+import { CoachService } from './coach/coach.service';
+import { startCoachScheduler } from './coach/coach.scheduler';
 import { StartHandler } from './bot/handlers/start.handler';
 import { ScenarioHandler } from './bot/handlers/scenario.handler';
 import { MessageHandler } from './bot/handlers/message.handler';
@@ -29,6 +31,8 @@ async function main() {
   const correction = new CorrectionService(llm);
   const exposures = new ExposuresService(db);
   const mistakes = new MistakesService(db);
+  const coach = new CoachService(db);
+  const coachTask = startCoachScheduler(coach);
 
   const start = new StartHandler(sessions);
   const scenario = new ScenarioHandler(sessions, vocab, grammar, generator, exposures);
@@ -44,8 +48,8 @@ async function main() {
   await bot.launch();
   console.log('Telegraf bot launched (polling).');
 
-  process.once('SIGINT', () => { bot.stop('SIGINT'); app.close(); });
-  process.once('SIGTERM', () => { bot.stop('SIGTERM'); app.close(); });
+  process.once('SIGINT', () => { bot.stop('SIGINT'); coachTask.stop(); app.close(); });
+  process.once('SIGTERM', () => { bot.stop('SIGTERM'); coachTask.stop(); app.close(); });
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });

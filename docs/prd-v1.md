@@ -84,7 +84,7 @@ Two stacked layers — the exposure table is plumbing; the mistake corpus is the
 - **Frontend:** Telegram bot (Telegraf.js)
 - **Backend:** Node.js + Fastify, TypeScript
 - **Database:** Supabase (Postgres + auth)
-- **LLM:** OpenAI (`gpt-4o-mini` default) — vocabulary-controlled generation is the load-bearing technical bet; see Risks.
+- **LLM:** OpenAI (`gpt-4.1-mini` default) — vocabulary-controlled generation is the load-bearing technical bet; see Risks.
 - **Coach loop:** scheduled job (`node-cron` in v1, can move to Supabase Edge Function later) reviewing session data and rebalancing user state.
 
 ## 9. V1 scope

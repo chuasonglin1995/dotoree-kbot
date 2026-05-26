@@ -14,12 +14,12 @@ describe('OpenAILLMClient', () => {
 
   it('passes messages and returns assistant content', async () => {
     mockCreate.mockResolvedValue({ choices: [{ message: { content: 'hello' } }] });
-    const client = new OpenAILLMClient('sk-test', 'gpt-4o-mini');
+    const client = new OpenAILLMClient('sk-test', 'gpt-4.1-mini');
     const out = await client.complete({ messages: [{ role: 'user', content: 'hi' }] });
     expect(out).toBe('hello');
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         messages: [{ role: 'user', content: 'hi' }],
       }),
     );
@@ -27,7 +27,7 @@ describe('OpenAILLMClient', () => {
 
   it('sets response_format when jsonMode is true', async () => {
     mockCreate.mockResolvedValue({ choices: [{ message: { content: '{}' } }] });
-    const client = new OpenAILLMClient('sk-test', 'gpt-4o-mini');
+    const client = new OpenAILLMClient('sk-test', 'gpt-4.1-mini');
     await client.complete({ messages: [], jsonMode: true });
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ response_format: { type: 'json_object' } }),

@@ -29,8 +29,14 @@ export class CoachService {
 
     for (const u of users ?? []) {
       const userId = (u as any).id;
+      const { data: userSessions } = await this.db
+        .from('sessions').select('id').eq('user_id', userId);
+      const sessionIds = (userSessions ?? []).map((s: any) => s.id);
+      if (sessionIds.length === 0) continue;
+
       const { data: turns } = await this.db
         .from('turns').select('id, hints_used')
+        .in('session_id', sessionIds)
         .order('created_at', { ascending: false }).limit(10);
       if (!turns) continue;
 

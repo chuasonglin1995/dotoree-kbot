@@ -10,7 +10,7 @@ describe('loadConfig', () => {
     const cfg = loadConfig({
       TELEGRAM_BOT_TOKEN: 'tg',
       SUPABASE_URL: 'https://x.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'svc',
+      SUPABASE_SECRET_KEY: 'svc',
       OPENAI_API_KEY: 'sk',
       OPENAI_MODEL: 'gpt-4.1-mini',
       DEV_USER_TELEGRAM_ID: '12345',
@@ -25,7 +25,7 @@ describe('loadConfig', () => {
     const cfg = loadConfig({
       TELEGRAM_BOT_TOKEN: 'tg',
       SUPABASE_URL: 'https://x.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'svc',
+      SUPABASE_SECRET_KEY: 'svc',
       OPENAI_API_KEY: 'sk',
       OPENAI_MODEL: 'gpt-4.1-mini',
       DEV_USER_TELEGRAM_ID: '12345',

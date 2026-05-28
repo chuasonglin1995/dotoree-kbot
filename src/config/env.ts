@@ -1,7 +1,7 @@
 export interface AppConfig {
   TELEGRAM_BOT_TOKEN: string;
   SUPABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
+  SUPABASE_SECRET_KEY: string;
   OPENAI_API_KEY: string;
   OPENAI_MODEL: string;
   DEV_USER_TELEGRAM_ID: number;
@@ -11,7 +11,7 @@ export interface AppConfig {
 const REQUIRED = [
   'TELEGRAM_BOT_TOKEN',
   'SUPABASE_URL',
-  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_SECRET_KEY',
   'OPENAI_API_KEY',
   'OPENAI_MODEL',
   'DEV_USER_TELEGRAM_ID',
@@ -34,7 +34,7 @@ export function loadConfig(raw: NodeJS.ProcessEnv): AppConfig {
   return {
     TELEGRAM_BOT_TOKEN: raw.TELEGRAM_BOT_TOKEN!,
     SUPABASE_URL: raw.SUPABASE_URL!,
-    SUPABASE_SERVICE_ROLE_KEY: raw.SUPABASE_SERVICE_ROLE_KEY!,
+    SUPABASE_SECRET_KEY: raw.SUPABASE_SECRET_KEY!,
     OPENAI_API_KEY: raw.OPENAI_API_KEY!,
     OPENAI_MODEL: raw.OPENAI_MODEL!,
     DEV_USER_TELEGRAM_ID: devId,

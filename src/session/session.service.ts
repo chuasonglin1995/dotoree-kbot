@@ -57,6 +57,13 @@ export class SessionService {
     return (data ?? null) as TurnRow | null;
   }
 
+  async getSession(sessionId: string): Promise<SessionRow | null> {
+    const { data, error } = await this.db
+      .from('sessions').select('*').eq('id', sessionId).maybeSingle();
+    if (error) throw error;
+    return (data ?? null) as SessionRow | null;
+  }
+
   async setHintsUsed(turnId: string, tier: number): Promise<void> {
     await this.db.from('turns').update({ hints_used: tier })
       .eq('id', turnId).lt('hints_used', tier);

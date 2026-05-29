@@ -21,7 +21,7 @@ export class TtsService {
   private hashKey(text: string, voice: string): string {
     const model = this.client.getModel();
     return createHash('sha256')
-      .update(`${text}|${voice}|${model}`)
+      .update(JSON.stringify([text, voice, model]))
       .digest('hex');
   }
 }

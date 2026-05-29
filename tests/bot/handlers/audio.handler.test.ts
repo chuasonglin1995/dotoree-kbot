@@ -85,4 +85,25 @@ describe('AudioHandler', () => {
     expect(ctx.reply).toHaveBeenCalledWith('Audio unavailable, try again?');
     expect(ctx.replyWithVoice).not.toHaveBeenCalled();
   });
+
+  it('replies "Audio unavailable" when scenario id is unknown', async () => {
+    const sessions: any = {
+      getTurn: jest.fn().mockResolvedValue({
+        id: 't1', session_id: 's1', bot_followup_ko: '안녕',
+      }),
+      getSession: jest.fn().mockResolvedValue({
+        id: 's1', user_id: 'u1', scenario: 'no-such-scenario',
+      }),
+    };
+    const tts: any = { synthesize: jest.fn() };
+    const handler = new AudioHandler(sessions, tts);
+    const ctx = makeCtx();
+
+    await handler.handle(ctx as any, 't1');
+
+    expect(ctx.answerCbQuery).toHaveBeenCalledWith();
+    expect(ctx.reply).toHaveBeenCalledWith('Audio unavailable, try again?');
+    expect(tts.synthesize).not.toHaveBeenCalled();
+    expect(ctx.replyWithVoice).not.toHaveBeenCalled();
+  });
 });

@@ -11,8 +11,8 @@ export async function runCoachTick(
   console.log('[coach] running rebalance...');
   try {
     await coach.rebalanceAllUsers();
-  } catch (e: any) {
-    console.error(`[coach] failed: ${e.message}`);
+  } catch (e) {
+    console.error(`[coach] failed:`, e);
   }
 }
 

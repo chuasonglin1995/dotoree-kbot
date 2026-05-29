@@ -7,9 +7,10 @@ export function createServer(health?: HealthState): FastifyInstance {
     if (!health) {
       return { ok: true, ts: new Date().toISOString() };
     }
-    const snap = health.snapshot(Date.now());
+    const nowMs = Date.now();
+    const snap = health.snapshot(nowMs);
     reply.code(snap.ok ? 200 : 503);
-    return { ...snap, ts: new Date().toISOString() };
+    return { ...snap, ts: new Date(nowMs).toISOString() };
   });
   return app;
 }

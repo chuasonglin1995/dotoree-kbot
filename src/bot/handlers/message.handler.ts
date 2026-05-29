@@ -5,7 +5,7 @@ import { GrammarService } from '../../reference/grammar.service';
 import { findScenario } from '../../reference/scenarios';
 import { CorrectionService } from '../../correction/correction.service';
 import { VocabConstrainedGenerator } from '../../llm/vocab-generator.interface';
-import { formatKoWithSpoilerEn, escapeMdV2, hintKeyboard } from '../formatting';
+import { formatKoWithSpoilerEn, escapeMdV2, turnKeyboard } from '../formatting';
 import { ExposuresService } from '../../memory/exposures.service';
 import { MistakesService } from '../../memory/mistakes.service';
 import { extractLemmaCandidates } from '../../memory/morphology';
@@ -77,7 +77,7 @@ export class MessageHandler {
 
     await ctx.reply(`${correctionBlock}\n\n${followupBlock}`, {
       parse_mode: 'MarkdownV2',
-      reply_markup: hintKeyboard(turn.id).reply_markup,
+      reply_markup: turnKeyboard(turn.id).reply_markup,
     });
   }
 }

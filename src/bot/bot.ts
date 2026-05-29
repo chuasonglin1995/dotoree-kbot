@@ -4,12 +4,14 @@ import { StartHandler } from './handlers/start.handler';
 import { ScenarioHandler } from './handlers/scenario.handler';
 import { MessageHandler } from './handlers/message.handler';
 import { HintHandler } from './handlers/hint.handler';
+import { AudioHandler } from './handlers/audio.handler';
 
 export interface BotDeps {
   start: StartHandler;
   scenario: ScenarioHandler;
   message: MessageHandler;
   hint: HintHandler;
+  audio: AudioHandler;
 }
 
 export function createBot(config: AppConfig, deps: BotDeps): Telegraf {
@@ -27,6 +29,8 @@ export function createBot(config: AppConfig, deps: BotDeps): Telegraf {
     const m = (ctx as any).match;
     return deps.hint.handle(ctx as Context, Number(m[1]) as 1 | 2 | 3, m[2]);
   });
+  bot.action(/^audio:(.+)$/, (ctx) =>
+    deps.audio.handle(ctx as Context, (ctx as any).match[1]));
   bot.on('text', (ctx) => deps.message.handle(ctx, ctx.message.text));
 
   return bot;

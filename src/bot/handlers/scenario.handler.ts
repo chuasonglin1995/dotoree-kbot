@@ -4,7 +4,7 @@ import { VocabService } from '../../reference/vocab.service';
 import { GrammarService } from '../../reference/grammar.service';
 import { findScenario } from '../../reference/scenarios';
 import { VocabConstrainedGenerator } from '../../llm/vocab-generator.interface';
-import { formatKoWithSpoilerEn, hintKeyboard } from '../formatting';
+import { formatKoWithSpoilerEn, turnKeyboard } from '../formatting';
 import { ExposuresService } from '../../memory/exposures.service';
 import { extractLemmaCandidates } from '../../memory/morphology';
 
@@ -47,7 +47,7 @@ export class ScenarioHandler {
 
     await ctx.reply(formatKoWithSpoilerEn(opener.textKo, opener.textEn), {
       parse_mode: 'MarkdownV2',
-      reply_markup: hintKeyboard(turn.id).reply_markup,
+      reply_markup: turnKeyboard(turn.id).reply_markup,
     });
   }
 }

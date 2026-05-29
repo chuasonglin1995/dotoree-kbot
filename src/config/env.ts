@@ -4,6 +4,7 @@ export interface AppConfig {
   SUPABASE_SECRET_KEY: string;
   OPENAI_API_KEY: string;
   OPENAI_MODEL: string;
+  OPENAI_TTS_MODEL: string;
   WHITELISTED_TELEGRAM_IDS: number[];
   PORT: number;
 }
@@ -47,6 +48,7 @@ export function loadConfig(raw: NodeJS.ProcessEnv): AppConfig {
     SUPABASE_SECRET_KEY: raw.SUPABASE_SECRET_KEY!,
     OPENAI_API_KEY: raw.OPENAI_API_KEY!,
     OPENAI_MODEL: raw.OPENAI_MODEL!,
+    OPENAI_TTS_MODEL: raw.OPENAI_TTS_MODEL ?? 'gpt-4o-mini-tts',
     WHITELISTED_TELEGRAM_IDS: ids,
     PORT: port,
   };

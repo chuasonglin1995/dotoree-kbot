@@ -16,6 +16,10 @@ import { StartHandler } from './bot/handlers/start.handler';
 import { ScenarioHandler } from './bot/handlers/scenario.handler';
 import { MessageHandler } from './bot/handlers/message.handler';
 import { HintHandler } from './bot/handlers/hint.handler';
+import { AudioCache } from './audio/audio-cache';
+import { TtsClient } from './audio/tts.client';
+import { TtsService } from './audio/tts.service';
+import { AudioHandler } from './bot/handlers/audio.handler';
 import { createBot } from './bot/bot';
 
 async function main() {
@@ -39,7 +43,12 @@ async function main() {
   const message = new MessageHandler(sessions, vocab, grammar, correction, generator, exposures, mistakes);
   const hint = new HintHandler(llm, sessions);
 
-  const bot = createBot(config, { start, scenario, message, hint });
+  const ttsClient = new TtsClient(config.OPENAI_API_KEY, config.OPENAI_TTS_MODEL);
+  const audioCache = new AudioCache('./.cache/audio');
+  const tts = new TtsService(ttsClient, audioCache);
+  const audio = new AudioHandler(sessions, tts);
+
+  const bot = createBot(config, { start, scenario, message, hint, audio });
 
   const app = createServer();
   await app.listen({ port: config.PORT, host: '0.0.0.0' });

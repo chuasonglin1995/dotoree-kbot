@@ -3,6 +3,7 @@ export interface Scenario {
   label: string;
   role: string;
   starterPrompt: string;
+  voice: string;
 }
 
 export const SCENARIOS: Scenario[] = [
@@ -11,18 +12,21 @@ export const SCENARIOS: Scenario[] = [
     label: '🍜 Restaurant',
     role: 'a friendly server in a casual Korean restaurant',
     starterPrompt: 'Greet the customer and ask if they are ready to order.',
+    voice: 'nova',
   },
   {
     id: 'cafe',
     label: '☕ Café',
     role: 'a barista in a small Seoul café',
     starterPrompt: 'Greet the customer and ask what they would like.',
+    voice: 'shimmer',
   },
   {
     id: 'transit',
     label: '🚇 Transit',
     role: 'a station attendant at a Korean subway station',
     starterPrompt: 'Greet a confused tourist who looks like they need directions.',
+    voice: 'onyx',
   },
 ];
 

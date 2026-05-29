@@ -39,3 +39,19 @@ describe('SessionService.findOrCreateUser', () => {
     expect(db.calls[0].insert).toEqual({ telegram_id: 999, current_topik_level: 1 });
   });
 });
+
+describe('SessionService.getSession', () => {
+  it('returns session by id regardless of ended_at', async () => {
+    const db = makeDb({ sessions: { id: 's1', user_id: 'u1', scenario: 'restaurant' } });
+    const svc = new SessionService(db.client);
+    const s = await svc.getSession('s1');
+    expect(s).toEqual({ id: 's1', user_id: 'u1', scenario: 'restaurant' });
+  });
+
+  it('returns null when session does not exist', async () => {
+    const db = makeDb({});
+    const svc = new SessionService(db.client);
+    const s = await svc.getSession('missing');
+    expect(s).toBeNull();
+  });
+});

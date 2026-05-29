@@ -36,4 +36,14 @@ describe('loadConfig', () => {
     const cfg = loadConfig(baseEnv);
     expect(cfg.PORT).toBe(3000);
   });
+
+  it('defaults OPENAI_TTS_MODEL to gpt-4o-mini-tts', () => {
+    const cfg = loadConfig(baseEnv);
+    expect(cfg.OPENAI_TTS_MODEL).toBe('gpt-4o-mini-tts');
+  });
+
+  it('uses OPENAI_TTS_MODEL from env when provided', () => {
+    const cfg = loadConfig({ ...baseEnv, OPENAI_TTS_MODEL: 'tts-1-hd' });
+    expect(cfg.OPENAI_TTS_MODEL).toBe('tts-1-hd');
+  });
 });

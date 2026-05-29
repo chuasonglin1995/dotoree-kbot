@@ -17,7 +17,7 @@ export async function pingTelegramOnce(
     // Liveness is inferred from staleness of the last success, so a failure
     // needs no state change — but log it so journalctl explains any later
     // 503 / systemd restart (journalctl is the only log surface in v1).
-    console.warn(`[health] telegram getMe failed: ${e.message}`);
+    console.warn(`[health] telegram getMe failed: ${e instanceof Error ? e.message : String(e)}`);
     return false;
   }
 }

@@ -23,4 +23,14 @@ describe('pingTelegramOnce', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('network'));
     warn.mockRestore();
   });
+
+  it('coerces a non-Error rejection into the warning message', async () => {
+    const h = new HealthState(T0);
+    const telegram = { getMe: jest.fn().mockRejectedValue('timeout-string') };
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const ok = await pingTelegramOnce(telegram, h, T0 + 100);
+    expect(ok).toBe(false);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('timeout-string'));
+    warn.mockRestore();
+  });
 });

@@ -21,6 +21,9 @@ import { TtsClient } from './audio/tts.client';
 import { TtsService } from './audio/tts.service';
 import { AudioHandler } from './bot/handlers/audio.handler';
 import { createBot } from './bot/bot';
+import { HealthState } from './health/health-state';
+import { startTelegramPinger } from './health/telegram-pinger';
+import { createShutdownHandler } from './shutdown';
 
 async function main() {
   const config = loadConfig(process.env);
@@ -36,7 +39,8 @@ async function main() {
   const exposures = new ExposuresService(db);
   const mistakes = new MistakesService(db);
   const coach = new CoachService(db);
-  const coachTask = startCoachScheduler(coach);
+  const health = new HealthState(Date.now());
+  const coachTask = startCoachScheduler(coach, health);
 
   const start = new StartHandler(sessions);
   const scenario = new ScenarioHandler(sessions, vocab, grammar, generator, exposures);
@@ -50,15 +54,22 @@ async function main() {
 
   const bot = createBot(config, { start, scenario, message, hint, audio });
 
-  const app = createServer();
+  const app = createServer(health);
   await app.listen({ port: config.PORT, host: '0.0.0.0' });
   console.log(`Fastify listening on :${config.PORT}`);
 
   await bot.launch();
   console.log('Telegraf bot launched (polling).');
 
-  process.once('SIGINT', () => { bot.stop('SIGINT'); coachTask.stop(); app.close(); });
-  process.once('SIGTERM', () => { bot.stop('SIGTERM'); coachTask.stop(); app.close(); });
+  const pinger = startTelegramPinger(bot.telegram, health);
+
+  const shutdown = createShutdownHandler({
+    bot,
+    coachTask: { stop: () => { pinger.stop(); coachTask.stop(); } },
+    app,
+  });
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });

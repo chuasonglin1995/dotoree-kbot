@@ -14,10 +14,11 @@ export function formatKoWithSpoilerEn(textKo: string, textEn: string): string {
   return `${escapeMdV2(textKo)}\n\n${spoiler(textEn)}`;
 }
 
-export function hintKeyboard(turnId: string) {
+export function turnKeyboard(turnId: string) {
   return Markup.inlineKeyboard([
     Markup.button.callback('💡 1', `hint:1:${turnId}`),
     Markup.button.callback('💡 2', `hint:2:${turnId}`),
     Markup.button.callback('💡 3', `hint:3:${turnId}`),
+    Markup.button.callback('🔊', `audio:${turnId}`),
   ]);
 }

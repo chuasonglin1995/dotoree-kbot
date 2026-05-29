@@ -15,6 +15,11 @@ export interface BotDeps {
 export function createBot(config: AppConfig, deps: BotDeps): Telegraf {
   const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
 
+  bot.use(async (ctx, next) => {
+    const id = ctx.from?.id;
+    if (id && config.WHITELISTED_TELEGRAM_IDS.includes(id)) return next();
+  });
+
   bot.start((ctx) => deps.start.handle(ctx));
   bot.action(/^scenario:(.+)$/, (ctx) =>
     deps.scenario.handle(ctx as Context, (ctx as any).match[1]));

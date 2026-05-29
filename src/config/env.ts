@@ -4,7 +4,7 @@ export interface AppConfig {
   SUPABASE_SECRET_KEY: string;
   OPENAI_API_KEY: string;
   OPENAI_MODEL: string;
-  DEV_USER_TELEGRAM_ID: number;
+  WHITELISTED_TELEGRAM_IDS: number[];
   PORT: number;
 }
 
@@ -14,7 +14,7 @@ const REQUIRED = [
   'SUPABASE_SECRET_KEY',
   'OPENAI_API_KEY',
   'OPENAI_MODEL',
-  'DEV_USER_TELEGRAM_ID',
+  'WHITELISTED_TELEGRAM_IDS',
 ] as const;
 
 export function loadConfig(raw: NodeJS.ProcessEnv): AppConfig {
@@ -23,9 +23,19 @@ export function loadConfig(raw: NodeJS.ProcessEnv): AppConfig {
       throw new Error(`Missing required env variable: ${key}`);
     }
   }
-  const devId = Number(raw.DEV_USER_TELEGRAM_ID);
-  if (!Number.isFinite(devId)) {
-    throw new Error('DEV_USER_TELEGRAM_ID must be a number');
+  const ids = raw.WHITELISTED_TELEGRAM_IDS!
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((s) => {
+      const n = Number(s);
+      if (!Number.isFinite(n)) {
+        throw new Error(`WHITELISTED_TELEGRAM_IDS contains a non-number: "${s}"`);
+      }
+      return n;
+    });
+  if (ids.length === 0) {
+    throw new Error('WHITELISTED_TELEGRAM_IDS must contain at least one id');
   }
   const port = raw.PORT ? Number(raw.PORT) : 3000;
   if (!Number.isFinite(port)) {
@@ -37,7 +47,7 @@ export function loadConfig(raw: NodeJS.ProcessEnv): AppConfig {
     SUPABASE_SECRET_KEY: raw.SUPABASE_SECRET_KEY!,
     OPENAI_API_KEY: raw.OPENAI_API_KEY!,
     OPENAI_MODEL: raw.OPENAI_MODEL!,
-    DEV_USER_TELEGRAM_ID: devId,
+    WHITELISTED_TELEGRAM_IDS: ids,
     PORT: port,
   };
 }

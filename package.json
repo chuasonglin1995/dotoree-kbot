@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "🌰 Small bot, big dreams. Dotoree Kbot helps you learn Korean through Telegram — because consistency beats cramming.",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "directories": {
     "doc": "docs"
@@ -14,7 +14,11 @@
     "build": "tsc -p tsconfig.json",
     "test": "jest",
     "seed": "tsx seeds/seed.ts",
-    "smoke:vocab": "tsx scripts/smoke-vocab-generator.ts"
+    "smoke:vocab": "tsx scripts/smoke-vocab-generator.ts",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:up": "supabase migration up"
   },
   "repository": {
     "type": "git",

@@ -65,6 +65,7 @@ async function main() {
 
   const shutdown = createShutdownHandler({
     bot,
+    // pinger has no dedicated shutdown slot; stop it alongside the cron task
     coachTask: { stop: () => { pinger.stop(); coachTask.stop(); } },
     app,
   });

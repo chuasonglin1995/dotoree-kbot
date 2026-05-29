@@ -36,4 +36,14 @@ describe('createShutdownHandler', () => {
     await handler('SIGTERM');
     expect(deps.exit).toHaveBeenCalledWith(0);
   });
+
+  it('attempts coach.stop and app.close even when bot.stop throws (best-effort)', async () => {
+    const deps = makeDeps();
+    deps.bot.stop = jest.fn(() => { throw new Error('bot boom'); });
+    const handler = createShutdownHandler(deps);
+    await handler('SIGTERM');
+    expect(deps.coachTask.stop).toHaveBeenCalledTimes(1);
+    expect(deps.app.close).toHaveBeenCalledTimes(1);
+    expect(deps.exit).toHaveBeenCalledWith(0);
+  });
 });

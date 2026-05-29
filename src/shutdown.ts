@@ -5,6 +5,14 @@ export interface ShutdownDeps {
   exit?: (code: number) => void;
 }
 
+async function attempt(label: string, fn: () => void | Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (e) {
+    console.error(`[shutdown] error stopping ${label}:`, e);
+  }
+}
+
 export function createShutdownHandler(
   deps: ShutdownDeps,
 ): (signal: string) => Promise<void> {
@@ -14,14 +22,12 @@ export function createShutdownHandler(
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`[shutdown] received ${signal}, stopping...`);
-    try {
-      await deps.bot.stop(signal);
-      deps.coachTask.stop();
-      await deps.app.close();
-    } catch (e: any) {
-      console.error(`[shutdown] error during stop: ${e.message}`);
-    } finally {
-      exit(0);
-    }
+    // Best-effort: attempt all three independently so one failure can't
+    // prevent the others (e.g. a bot.stop error must not skip the poll-offset
+    // flush or the server close).
+    await attempt('bot', () => deps.bot.stop(signal));
+    await attempt('coach scheduler', () => deps.coachTask.stop());
+    await attempt('server', () => deps.app.close());
+    exit(0);
   };
 }

@@ -47,10 +47,11 @@ src/bot/handlers/
   audio.handler.ts   handles `audio:<turnId>` callback
 
 Touchpoints:
-  src/bot/formatting.ts        keyboard helper extended with 🔊 button
-  src/reference/scenarios.ts   Scenario interface gains `voice` field
-  src/bot/bot.ts               wire AudioHandler into callback router
-  src/main.ts                  construct TtsClient, AudioCache, TtsService, AudioHandler
+  src/bot/formatting.ts          keyboard helper extended with 🔊 button
+  src/reference/scenarios.ts     Scenario interface gains `voice` field
+  src/session/session.service.ts add getSession(sessionId) lookup
+  src/bot/bot.ts                 wire AudioHandler into callback router
+  src/main.ts                    construct TtsClient, AudioCache, TtsService, AudioHandler
 ```
 
 No DB migration. No new env vars (reuses `OPENAI_API_KEY`). One new entry in `.gitignore`: `.cache/audio/`.
@@ -118,10 +119,23 @@ class AudioHandler {
 
 - `ctx.answerCbQuery()` immediately to dismiss the spinner.
 - Loads turn via `SessionService.getTurn(turnId)`. If missing → answer with "Message expired", return.
-- Loads session, resolves scenario, reads `scenario.voice`.
+- Loads the session **the turn belongs to**, via `SessionService.getSession(turn.session_id)` (not `currentSession`). See "Voice resolution" below.
+- Resolves scenario via `findScenario(session.scenario)`, reads `scenario.voice`.
 - Calls `TtsService.synthesize(turn.bot_followup_ko, voice)`.
 - Sends `ctx.replyWithVoice({ source: buffer })`.
 - On error, replies with a soft "Audio unavailable, try again?" — error is logged, turn state untouched.
+
+**Voice resolution — by turn, not by user.** A turn's audio must always play in the voice of *its own* scenario, even if the user has since switched scenarios. Concrete case: user starts a Restaurant session (voice `nova`), then switches to Café (voice `shimmer`), then scrolls up and taps 🔊 on a Restaurant turn. The correct behavior is to play that turn in `nova` — the voice it was always meant to be heard in. Using `currentSession(user)` would pick the wrong voice. We must look up the session by `turn.session_id`.
+
+### SessionService addition
+
+A new method on the existing `SessionService`:
+
+```ts
+getSession(sessionId: string): Promise<SessionRow | null>
+```
+
+Fetches a session row by id, regardless of whether it's the user's current session. Mirrors the existing `getTurn(turnId)` shape. Required by `AudioHandler` for the voice-resolution rule above.
 
 ### Scenario config
 
@@ -156,9 +170,9 @@ Both `MessageHandler` and `ScenarioHandler` use the new helper. The 🔊 callbac
 
 3. Bot router → AudioHandler.handle(ctx, turnId)
    ├─ answerCbQuery()                              (UI spinner dismissed)
-   ├─ sessions.getTurn(turnId)        → turn       (or "expired")
-   ├─ sessions.currentSession(...)    → session
-   ├─ findScenario(session.scenario)  → scenario   (provides voice)
+   ├─ sessions.getTurn(turnId)             → turn       (or "expired")
+   ├─ sessions.getSession(turn.session_id) → session   (NOT currentSession — see Voice resolution)
+   ├─ findScenario(session.scenario)       → scenario  (provides voice)
    ├─ tts.synthesize(turn.bot_followup_ko, scenario.voice)
    │   ├─ hash = sha256(text|voice|model)
    │   ├─ cache.get(hash)              → Buffer? (hit → done)
@@ -195,13 +209,17 @@ Failures are contained at the handler boundary; the service throws and the cache
   - Second call with same input: invokes `cache.get`, returns cached buffer, does **not** invoke client.
   - Different voice for same text: client invoked again (different hash).
 
+- `audio.handler.spec.ts` (with mocked `SessionService` and `TtsService`)
+  - **Voice resolution by turn:** given a turn whose `session_id` points to a Restaurant session, and a user whose `currentSession` is Café, the handler must call `TtsService.synthesize` with the Restaurant voice (`nova`), not the Café voice (`shimmer`). This pins down the correctness rule from "Voice resolution".
+
 **Manual smoke (dev, polling mode):**
 
 1. `/start` → pick Restaurant → tap 🔊 on the opener → hear Korean audio.
 2. Tap 🔊 again on the same message → identical playback. Verify in logs that no OpenAI call was made.
 3. Send a Korean reply → bot follows up → tap 🔊 on the follow-up → hear it.
 4. `/start` → pick Café → tap 🔊 → confirm different voice (`shimmer` vs. `nova`).
-5. Set scenario voice to an invalid value in config → tap 🔊 → confirm graceful "Audio unavailable" reply, no crash.
+5. **Voice-resolution check:** in Restaurant, generate a turn → switch to Café (creates new session) → scroll back to the Restaurant turn → tap 🔊 → confirm it plays in `nova`, not `shimmer`.
+6. Set scenario voice to an invalid value in config → tap 🔊 → confirm graceful "Audio unavailable" reply, no crash.
 
 ## 9. Forward compatibility
 

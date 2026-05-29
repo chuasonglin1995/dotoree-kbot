@@ -659,6 +659,18 @@ This task only verifies behavior; nothing to commit.
 
 ---
 
+## Post-execution amendments
+
+The plan was executed via subagent-driven development; these refinements were made during execution (each reviewed and committed):
+
+- **Task 2:** `pingTelegramOnce` renders non-`Error` rejections safely (`e instanceof Error ? e.message : String(e)`) and logs every failure to stderr (so `journalctl` explains any 503/restart); added a test for the non-`Error` path.
+- **Task 4:** the endpoint reads real `Date.now()`, so the tests were anchored to real time (`const now = Date.now()` / `Date.now() - 10_000_000`) rather than the fixed `T0` constant in the original draft, which would have read as stale against the production clock. Also captured a single `nowMs` so the response's `nowMs` and `ts` are the same instant.
+- **Task 5:** hardened from a single try/catch to **best-effort** — each of `bot.stop` / `coachTask.stop` / `app.close` is attempted independently (via an `attempt(label, fn)` helper) so one failure can't skip the poll-offset flush or server close; error logging uses `console.error(..., e)`. Added a test for the bot-stop-throws path.
+- **Task 6b (new — build output fix):** discovered during Task 6 that `npm start` (`node dist/main.js`) didn't match `tsc` output (`dist/src/main.js`, with `tests`/`seeds`/`scripts` also compiled in) because `tsconfig.json` uses `rootDir: "."`. Added `tsconfig.build.json` (`rootDir: src`, `include: src/**`, `types: ["node"]`) and pointed `build` at it, so the production build emits `dist/main.js` cleanly. `tsconfig.json` left untouched so ts-jest keeps type-checking tests.
+- **Task 3:** coach scheduler error logging aligned to the same safe `console.error(..., e)` style for consistency.
+
+**Final state:** 64 tests passing (19 suites); `npm run build` clean, emits `dist/main.js`. Final holistic review: ready to merge, no must-fix items. Task 7 (local smoke run of the live polling bot) is left for the human to run, since it polls the real bot token (ADR 0001 single-instance) and hits live Telegram/OpenAI/Supabase.
+
 ## Next plan (separate document)
 
 After this lands, the infrastructure plan (`2026-05-30-deploy-infra-aws-terraform.md`) covers: Terraform S3 state bootstrap → networking (public subnet, egress-only SG, no NAT) → EC2 + systemd units (incl. the `kbot-health.timer` that probes this `/healthz`) → SSM Parameter Store secrets → GitHub OIDC + SSM deploy pipeline → guardrails. It depends on this plan being merged (the health endpoint and clean shutdown must exist first).

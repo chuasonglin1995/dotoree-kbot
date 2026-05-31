@@ -727,10 +727,12 @@ git commit -m "infra(prod): SNS alerts, StatusCheckFailed alarm with auto-recove
 - [ ] **Step 1: Write `infra/prod/oidc.tf`**
 
 ```hcl
-resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+# The GitHub OIDC provider is account-wide (one per URL) and is typically shared
+# across projects. Look it up instead of creating it (creating a duplicate errors
+# with EntityAlreadyExists). If your account has NONE yet, create it once with a
+# `resource "aws_iam_openid_connect_provider"` and switch this to reference it.
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
 }
 
 data "aws_iam_policy_document" "github_assume" {
@@ -738,7 +740,7 @@ data "aws_iam_policy_document" "github_assume" {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [data.aws_iam_openid_connect_provider.github.arn]
     }
     condition {
       test     = "StringEquals"
@@ -763,6 +765,11 @@ data "aws_iam_policy_document" "github_deploy" {
     sid       = "UploadArtifacts"
     actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.artifacts.arn}/*"]
+  }
+  statement {
+    sid       = "FindInstanceByTag"
+    actions   = ["ec2:DescribeInstances"]
+    resources = ["*"] # DescribeInstances does not support resource-level scoping
   }
   statement {
     sid     = "TriggerDeploy"
@@ -926,6 +933,8 @@ concurrency:
 env:
   AWS_REGION: ap-southeast-1
   ARTIFACT_BUCKET: dotoree-kbot-artifacts
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::892532234259:role/kbot-github-deploy
+  INSTANCE_NAME: kbot-prod   # the EC2 Name tag; looked up at deploy time
 
 jobs:
   build-and-deploy:
@@ -948,8 +957,19 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Find the EC2 instance by Name tag
+        run: |
+          IID=$(aws ec2 describe-instances --region "$AWS_REGION" \
+            --filters "Name=tag:Name,Values=$INSTANCE_NAME" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].InstanceId' --output text)
+          if [ -z "$IID" ] || [ "$IID" = "None" ]; then
+            echo "::error::no running instance tagged Name=$INSTANCE_NAME"; exit 1
+          fi
+          echo "IID=$IID" >> "$GITHUB_ENV"
+          echo "instance: $IID"
 
       - name: Upload artifact to S3
         run: aws s3 cp "kbot-${GITHUB_SHA::7}.tgz" "s3://${ARTIFACT_BUCKET}/"
@@ -957,19 +977,22 @@ jobs:
       - name: Trigger deploy via SSM
         run: |
           CMD_ID=$(aws ssm send-command \
-            --instance-ids "${{ vars.KBOT_INSTANCE_ID }}" \
+            --instance-ids "$IID" \
             --document-name AWS-RunShellScript \
             --comment "deploy ${GITHUB_SHA::7}" \
             --parameters commands="/opt/kbot/deploy.sh ${GITHUB_SHA::7}" \
             --query 'Command.CommandId' --output text)
           echo "command: $CMD_ID"
-          aws ssm wait command-executed \
-            --command-id "$CMD_ID" --instance-id "${{ vars.KBOT_INSTANCE_ID }}" || true
-          aws ssm get-command-invocation \
-            --command-id "$CMD_ID" --instance-id "${{ vars.KBOT_INSTANCE_ID }}" \
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$IID" || true
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$IID" \
             --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
             --output json
 ```
+
+> No GitHub repo variables needed: the role ARN + region are hardcoded in `env:` (not
+> secret), and the instance is looked up by its `Name=kbot-prod` tag at deploy time, so the
+> workflow survives a box rebuild (new instance ID) with no edits. The deploy role grants
+> `ec2:DescribeInstances` for that lookup.
 
 - [ ] **Step 2: Append Terraform + dist ignores to `.gitignore`**
 
@@ -990,14 +1013,12 @@ dist/
 
 > Keep `infra/prod/terraform.tfvars` committed (it holds only non-secret config + an email). If you'd rather not commit the email, gitignore it and document the variables instead.
 
-- [ ] **Step 3: (HUMAN) Set the GitHub repo variables**
+- [ ] **Step 3: (HUMAN) — nothing to set**
 
-The workflow reads three `vars.*` (repo Variables, not Secrets — none are sensitive):
-```bash
-gh variable set AWS_DEPLOY_ROLE_ARN --body "$(terraform -chdir=infra/prod output -raw deploy_role_arn)"
-gh variable set KBOT_INSTANCE_ID    --body "$(terraform -chdir=infra/prod output -raw instance_id)"
-# AWS_REGION/ARTIFACT_BUCKET are hard-coded in env: above; or move them to vars too.
-```
+No GitHub repo variables are required. The role ARN, region, and artifact bucket are
+hardcoded in the workflow's `env:` (none are secret), and the instance is looked up by its
+`Name=kbot-prod` tag at deploy time. If you ever rename the repo/account/role, update the
+hardcoded `AWS_DEPLOY_ROLE_ARN` in `.github/workflows/deploy.yml`.
 
 - [ ] **Step 4: Validate the workflow locally (agent-safe)**
 

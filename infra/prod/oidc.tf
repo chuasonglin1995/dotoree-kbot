@@ -37,6 +37,11 @@ data "aws_iam_policy_document" "github_deploy" {
     resources = ["${aws_s3_bucket.artifacts.arn}/*"]
   }
   statement {
+    sid       = "FindInstanceByTag"
+    actions   = ["ec2:DescribeInstances"]
+    resources = ["*"] # DescribeInstances does not support resource-level scoping
+  }
+  statement {
     sid     = "TriggerDeploy"
     actions = ["ssm:SendCommand"]
     resources = [

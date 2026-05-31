@@ -15,6 +15,8 @@ concurrency:
 env:
   AWS_REGION: ap-southeast-1
   ARTIFACT_BUCKET: dotoree-kbot-artifacts
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::892532234259:role/kbot-github-deploy
+  INSTANCE_NAME: kbot-prod   # the EC2 Name tag; looked up at deploy time
 
 jobs:
   build-and-deploy:
@@ -37,8 +39,19 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Find the EC2 instance by Name tag
+        run: |
+          IID=$(aws ec2 describe-instances --region "$AWS_REGION" \
+            --filters "Name=tag:Name,Values=$INSTANCE_NAME" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].InstanceId' --output text)
+          if [ -z "$IID" ] || [ "$IID" = "None" ]; then
+            echo "::error::no running instance tagged Name=$INSTANCE_NAME"; exit 1
+          fi
+          echo "IID=$IID" >> "$GITHUB_ENV"
+          echo "instance: $IID"
 
       - name: Upload artifact to S3
         run: aws s3 cp "kbot-${GITHUB_SHA::7}.tgz" "s3://${ARTIFACT_BUCKET}/"
@@ -46,15 +59,13 @@ jobs:
       - name: Trigger deploy via SSM
         run: |
           CMD_ID=$(aws ssm send-command \
-            --instance-ids "${{ vars.KBOT_INSTANCE_ID }}" \
+            --instance-ids "$IID" \
             --document-name AWS-RunShellScript \
             --comment "deploy ${GITHUB_SHA::7}" \
             --parameters commands="/opt/kbot/deploy.sh ${GITHUB_SHA::7}" \
             --query 'Command.CommandId' --output text)
           echo "command: $CMD_ID"
-          aws ssm wait command-executed \
-            --command-id "$CMD_ID" --instance-id "${{ vars.KBOT_INSTANCE_ID }}" || true
-          aws ssm get-command-invocation \
-            --command-id "$CMD_ID" --instance-id "${{ vars.KBOT_INSTANCE_ID }}" \
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$IID" || true
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$IID" \
             --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
             --output json

@@ -126,8 +126,11 @@ To return to latest, re-run the deploy (push, or the manual deploy above).
 
 ## Rotating / updating secrets
 
-All config is one JSON secret. Update it in place; the change takes effect on the **next
-deploy/restart** (when `deploy.sh` re-renders `/opt/kbot/.env`).
+All config is one JSON secret (`dotoree_kbot-prod`). Terraform creates it **empty** — you
+must set the value before the first deploy (or that deploy fails, since `deploy.sh` reads
+the secret to render `/opt/kbot/.env`). `deploy.sh` writes *whatever keys* the JSON contains
+to `.env`, so to add a new env var you just add a key here — no Terraform change needed.
+The change takes effect on the **next deploy/restart**.
 
 ```bash
 cat > /tmp/kbot-secret.json <<'JSON'

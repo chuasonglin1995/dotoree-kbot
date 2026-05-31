@@ -392,42 +392,34 @@ git commit -m "infra(prod): instance IAM role/profile — SSM core, read config 
 **Files:**
 - Create: `infra/prod/secrets.tf`
 
-All app config is stored as a single JSON secret (`dotoree_kbot-prod`) — ~$0.40/mo total, vs ~$0.40 *per key*. Real values are written out-of-band; `ignore_changes` keeps Terraform from reverting them and keeps real values out of state. `recovery_window_in_days = 0` lets `terraform destroy` remove the secret immediately (clean per-project teardown, no 7–30 day name-reservation window).
+All app config is stored as a single JSON secret (`dotoree_kbot-prod`) — ~$0.40/mo total, vs ~$0.40 *per key*. The secret is created **empty** (no value seeded in Terraform); you populate it out-of-band (Task 10). This keeps real values out of state entirely. `deploy.sh` renders `.env` from *whatever keys* the JSON contains (`jq to_entries`), so there's no fixed schema in Terraform — `src/config/env.ts` validates required keys at startup. `recovery_window_in_days = 0` lets `terraform destroy` remove the secret immediately (clean per-project teardown, no 7–30 day name-reservation window).
+
+> Because the secret starts empty, the **first deploy fails until you set the value** (deploy.sh's `get-secret-value` has nothing to read). Populate it right after `terraform apply` (Task 10 Step 3).
 
 - [ ] **Step 1: Write `infra/prod/secrets.tf`**
 
 ```hcl
-# A single Secrets Manager secret holding ALL app config as a JSON object
-# (one secret => ~$0.40/mo, vs ~$0.40 PER key). Real values are set out-of-band
-# with `aws secretsmanager put-secret-value` (see Task 10); ignore_changes
-# on secret_string means Terraform won't read or overwrite the real values.
+# One Secrets Manager secret holding ALL app config as a JSON object
+# (one secret => ~$0.40/mo, vs ~$0.40 PER key).
+#
+# We intentionally do NOT seed a value here — the secret is created empty and you
+# populate it out-of-band (Console UI, or `aws secretsmanager put-secret-value`;
+# see infra/README.md). That keeps real values out of Terraform state entirely,
+# and the bot validates required keys at startup (src/config/env.ts).
+#
+# Expected JSON keys:
+#   TELEGRAM_BOT_TOKEN, SUPABASE_URL, SUPABASE_SECRET_KEY, OPENAI_API_KEY,
+#   OPENAI_MODEL, OPENAI_TTS_MODEL, WHITELISTED_TELEGRAM_IDS, PORT
+#
+# NOTE: until you set the value, the first deploy will fail (deploy.sh reads this
+# secret to render /opt/kbot/.env). Populate it right after `terraform apply`.
 resource "aws_secretsmanager_secret" "config" {
   name        = "dotoree_kbot-prod"
-  description = "All env config for the kbot prod bot (JSON)."
+  description = "All env config for the kbot prod bot (JSON object)."
 
   # Delete immediately on `terraform destroy` (no 7-30 day recovery window),
   # so the project — including its secret — tears down cleanly and can be re-created.
   recovery_window_in_days = 0
-}
-
-# Seed a placeholder version so the secret is immediately readable. The real
-# values are written out-of-band; ignore_changes keeps Terraform from reverting them.
-resource "aws_secretsmanager_secret_version" "config" {
-  secret_id = aws_secretsmanager_secret.config.id
-  secret_string = jsonencode({
-    TELEGRAM_BOT_TOKEN       = "PLACEHOLDER"
-    SUPABASE_URL             = "PLACEHOLDER"
-    SUPABASE_SECRET_KEY      = "PLACEHOLDER"
-    OPENAI_API_KEY           = "PLACEHOLDER"
-    OPENAI_MODEL             = "gpt-4.1-mini"
-    OPENAI_TTS_MODEL         = "gpt-4o-mini-tts"
-    WHITELISTED_TELEGRAM_IDS = "PLACEHOLDER"
-    PORT                     = "3000"
-  })
-
-  lifecycle {
-    ignore_changes = [secret_string]
-  }
 }
 ```
 
@@ -1072,7 +1064,7 @@ Confirm the bot recovers. Then redeploy latest (re-run the Action) to return to 
 - **EC2 Instance Connect break-glass** — works out-of-the-box on AL2023 without extra Terraform (ephemeral keys, no standing port); documented as the fallback in the design doc. No resource needed unless you want to restrict it.
 - **Observability stack** (Prometheus/Grafana/CloudWatch metrics) — explicitly deferred per ADR 0002.
 
-**Placeholder scan:** the only literal `"PLACEHOLDER"` values are in the secret's seeded JSON (overwritten out-of-band in Task 10) — not a plan gap. Bucket names / account-specific values are parameterized via variables/tfvars.
+**Placeholder scan:** none — the secret is created empty and its value is set out-of-band (Task 10); no fake values live in Terraform or state. Bucket names / account-specific values are parameterized via variables/tfvars.
 
 **Consistency check:** region (`ap-southeast-1`), bucket names, `/kbot/prod/` SSM prefix, `/opt/kbot` paths, and the `kbot-<sha>.tgz` artifact name are identical across `user_data.sh.tpl` (`deploy.sh`), the workflow, and the manual commands. The `${GITHUB_SHA::7}` short-SHA in CI matches the `git rev-parse --short HEAD` used in the Task 10 manual deploy.
 

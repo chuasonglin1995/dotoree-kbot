@@ -4,3 +4,13 @@ dist/
 *.log
 .DS_Store
 .cache/
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+crash.log
+
+# Build artifacts
+*.tgz

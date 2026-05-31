@@ -835,7 +835,7 @@ git commit -m "infra(prod): GitHub OIDC provider + scoped deploy role; stack out
 ```hcl
 region               = "ap-southeast-1"
 artifact_bucket_name = "dotoree-kbot-artifacts"
-alert_email          = "songlin@hq.xyz"
+alert_email          = "chuasonglin1995@gmail.com"
 github_repo          = "chuasonglin1995/dotoree-kbot"
 ```
 

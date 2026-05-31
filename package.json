@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "test": "jest",
     "seed": "tsx seeds/seed.ts",
     "smoke:vocab": "tsx scripts/smoke-vocab-generator.ts",

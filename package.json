@@ -13,7 +13,7 @@
     "start": "node dist/main.js",
     "build": "tsc -p tsconfig.build.json",
     "test": "jest",
-    "seed": "tsx seeds/seed.ts",
+    "seed": "tsx scripts/seed.ts",
     "smoke:vocab": "tsx scripts/smoke-vocab-generator.ts",
     "db:start": "supabase start",
     "db:stop": "supabase stop",

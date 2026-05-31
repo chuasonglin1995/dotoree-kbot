@@ -673,4 +673,4 @@ The plan was executed via subagent-driven development; these refinements were ma
 
 ## Next plan (separate document)
 
-After this lands, the infrastructure plan (`2026-05-30-deploy-infra-aws-terraform.md`) covers: Terraform S3 state bootstrap → networking (public subnet, egress-only SG, no NAT) → EC2 + systemd units (incl. the `kbot-health.timer` that probes this `/healthz`) → SSM Parameter Store secrets → GitHub OIDC + SSM deploy pipeline → guardrails. It depends on this plan being merged (the health endpoint and clean shutdown must exist first).
+After this lands, the infrastructure plan (`2026-05-30-deploy-infra-aws-terraform.md`) covers: Terraform S3 state bootstrap → networking (public subnet, egress-only SG, no NAT) → EC2 + systemd units (incl. the `kbot-health.timer` that probes this `/healthz`) → Secrets Manager config secret → GitHub OIDC + SSM deploy pipeline → guardrails. It depends on this plan being merged (the health endpoint and clean shutdown must exist first).

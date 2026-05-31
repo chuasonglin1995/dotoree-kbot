@@ -28,18 +28,3 @@ variable "alert_email" {
   type        = string
   description = "Email to subscribe to the SNS alerts topic."
 }
-
-variable "ssm_parameters" {
-  description = "App env vars stored in SSM Parameter Store. secure=true => SecureString."
-  type        = map(object({ secure = bool }))
-  default = {
-    TELEGRAM_BOT_TOKEN       = { secure = true }
-    SUPABASE_URL             = { secure = false }
-    SUPABASE_SECRET_KEY      = { secure = true }
-    OPENAI_API_KEY           = { secure = true }
-    OPENAI_MODEL             = { secure = false }
-    OPENAI_TTS_MODEL         = { secure = false }
-    WHITELISTED_TELEGRAM_IDS = { secure = false }
-    PORT                     = { secure = false }
-  }
-}

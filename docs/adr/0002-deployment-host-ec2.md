@@ -19,7 +19,7 @@ Supporting choices for v1:
 - **Networking:** public subnet + public IP + **egress-only** security group. **No NAT gateway** (it would cost ~8× the instance).
 - **Access & deploy:** **SSM** (Session Manager + Run Command); EC2 Instance Connect as break-glass; **no standing SSH**.
 - **CI/CD:** GitHub **Actions → OIDC → S3 artifact → SSM Send Command**; build in CI, release dirs + `current` symlink for rollback.
-- **Secrets:** SSM Parameter Store (SecureString/KMS) rendered into an `EnvironmentFile`.
+- **Secrets:** one AWS Secrets Manager secret (`kbot/prod/config`, JSON of all env vars) rendered into an `EnvironmentFile`. (Chosen over SSM Parameter Store: same flat namespace + clean `terraform destroy` teardown either way, but the team preferred a purpose-built secrets vault; ~$0.40/mo for the single JSON secret.)
 - **Terraform state:** S3 backend + native locking.
 - **Environments:** prod only (separate bot token for local dev).
 - **Observability:** deferred — `journalctl` + systemd self-heal + a deep `/healthz` + the near-free `StatusCheckFailed` alarm. Add metrics/paging later.

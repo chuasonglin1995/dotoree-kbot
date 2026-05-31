@@ -219,7 +219,7 @@ The key portability point: **app metrics and the outbound-heartbeat pattern are 
 - **Environments?** → **Prod only** for v1; separate bot token for local dev so it never steals prod updates. Staging deferred.
 - **Terraform state?** → **S3 backend + native locking** (small bootstrap step first).
 - **Observability?** → **Deferred.** Ship compute + CI/CD with `journalctl` + systemd self-heal + the (near-free) `StatusCheckFailed` alarm. Add the metrics/alerting stack when we want *paging*, not just self-heal.
-- **Secrets?** → **SSM Parameter Store (SecureString/KMS)** rendered into an `EnvironmentFile`, not a hand-placed `.env`.
+- **Secrets?** → **one AWS Secrets Manager secret** (`kbot/prod/config`, JSON of all env vars) rendered into an `EnvironmentFile`, not a hand-placed `.env`. (Revised from SSM Parameter Store during infra build — both teardown cleanly via `terraform destroy`; chose the purpose-built secrets vault. ~$0.40/mo as one JSON secret.)
 - **Region** — pick closest-to-cheapest; latency to Telegram/OpenAI is not critical.
 
 ## CI/CD evolution by stage
@@ -251,7 +251,7 @@ Grounded in the actual code: graceful shutdown already exists (`src/main.ts:60-6
 - `WorkingDirectory=/opt/kbot/current` so the relative `./.cache/audio` path resolves.
 
 **Secrets**
-- SSM Parameter Store (SecureString/KMS); instance role scoped to `ssm:GetParameter` + `kms:Decrypt`; rendered into `/opt/kbot/.env`.
+- One Secrets Manager secret (`kbot/prod/config`, JSON); instance role scoped to `secretsmanager:GetSecretValue` on that ARN + `kms:Decrypt`; rendered into `/opt/kbot/.env` via `jq`.
 
 **Build & release**
 - Build in CI; ship `dist/` + `package.json` + lockfile; `npm ci --omit=dev` on the box.

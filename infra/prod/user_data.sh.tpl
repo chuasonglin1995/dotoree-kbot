@@ -2,7 +2,7 @@
 set -euxo pipefail
 
 # --- Node 22 (arm64) + tooling ---
-dnf install -y nodejs22 nodejs22-npm tar gzip awscli || dnf install -y nodejs npm tar gzip
+dnf install -y nodejs22 nodejs22-npm tar gzip jq awscli || dnf install -y nodejs npm tar gzip jq
 # AL2023 ships Node via dnf; if the versioned package name differs, fall back to the default.
 ln -sf "$(command -v node)" /usr/local/bin/node || true
 
@@ -26,10 +26,10 @@ tar -xzf "/tmp/kbot-$SHA.tgz" -C "$REL"
 cd "$REL"
 npm ci --omit=dev
 
-# render /opt/kbot/.env from SSM Parameter Store (decrypted)
-aws ssm get-parameters-by-path --path /kbot/prod --with-decryption \
-  --query 'Parameters[].[Name,Value]' --output text --region "$REGION" \
-  | awk -F'\t' '{ n=$1; sub(".*/","",n); print n"="$2 }' > /opt/kbot/.env
+# render /opt/kbot/.env from the Secrets Manager JSON secret
+aws secretsmanager get-secret-value --secret-id kbot/prod/config --region "$REGION" \
+  --query SecretString --output text \
+  | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /opt/kbot/.env
 chmod 600 /opt/kbot/.env
 chown kbot:kbot /opt/kbot/.env
 

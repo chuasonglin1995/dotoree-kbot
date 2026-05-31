@@ -21,17 +21,15 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
 
 data "aws_iam_policy_document" "runtime" {
   statement {
-    sid     = "ReadConfigParams"
-    actions = ["ssm:GetParametersByPath", "ssm:GetParameters", "ssm:GetParameter"]
-    resources = [
-      "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/kbot/prod/*",
-    ]
+    sid       = "ReadConfigSecret"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.config.arn]
   }
 
   statement {
-    sid       = "DecryptSecureStrings"
+    sid       = "DecryptSecrets"
     actions   = ["kms:Decrypt"]
-    resources = ["*"] # the AWS-managed SSM key; scope to a CMK ARN if you create one
+    resources = ["*"] # the AWS-managed Secrets Manager key; scope to a CMK ARN if you create one
   }
 
   statement {

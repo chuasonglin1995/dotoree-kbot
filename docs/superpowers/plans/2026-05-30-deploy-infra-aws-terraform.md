@@ -1,10 +1,10 @@
 # AWS + Terraform Deployment Infrastructure Implementation Plan
 
-> **For agentic workers:** This plan is **human-gated**. Terraform files can be written and `terraform validate`'d by an agent, but `terraform apply`, secret population, the AWS account, and GitHub OIDC/secret setup require real credentials and create billable resources with outward effects. Do NOT run `apply`, `put-parameter`, or `gh secret set` autonomously — produce the files, then hand off the gated commands to the human. Steps use checkbox (`- [ ]`) syntax.
+> **For agentic workers:** This plan is **human-gated**. Terraform files can be written and `terraform validate`'d by an agent, but `terraform apply`, secret population, the AWS account, and GitHub OIDC/secret setup require real credentials and create billable resources with outward effects. Do NOT run `apply`, `put-secret-value`, or `gh variable set` autonomously — produce the files, then hand off the gated commands to the human. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Stand up the v1 deployment for the bot — a single EC2 `t4g.nano` running the bot as a hardened systemd service, provisioned by Terraform, deployed via GitHub Actions (OIDC → S3 artifact → SSM), per ADR 0002.
 
-**Architecture:** One Terraform stack (`infra/prod`) in the AWS default VPC: an egress-only EC2 instance with an instance profile that reads secrets from SSM Parameter Store and pulls build artifacts from S3. A separate one-time `infra/bootstrap` stack creates the S3 state backend. CI/CD is a GitHub Actions workflow that authenticates via OIDC (no stored keys), builds in CI, uploads an artifact to S3, and triggers `deploy.sh` on the box via SSM Run Command. No inbound ports; access and deploys both go through SSM.
+**Architecture:** One Terraform stack (`infra/prod`) in the AWS default VPC: an egress-only EC2 instance with an instance profile that reads its config from a single Secrets Manager secret and pulls build artifacts from S3. A separate one-time `infra/bootstrap` stack creates the S3 state backend. CI/CD is a GitHub Actions workflow that authenticates via OIDC (no stored keys), builds in CI, uploads an artifact to S3, and triggers `deploy.sh` on the box via SSM Run Command. No inbound ports; access and deploys both go through SSM.
 
 **Tech Stack:** Terraform ≥ 1.10 (S3 native state locking), AWS provider ~> 5.0, Amazon Linux 2023 (arm64), Node 22, systemd, GitHub Actions.
 
@@ -20,7 +20,7 @@
 - State bucket: `dotoree-kbot-tfstate` — **S3 bucket names are globally unique; if taken, change everywhere.**
 - Artifact bucket: `dotoree-kbot-artifacts` — same caveat.
 - GitHub repo: `chuasonglin1995/dotoree-kbot`.
-- SSM secret path prefix: `/kbot/prod/`.
+- Secrets Manager secret id: `kbot/prod/config` (one secret, JSON body of all env vars).
 - App dir on box: `/opt/kbot` (releases in `/opt/kbot/releases/<sha>`, symlinked `current`).
 
 ---
@@ -36,11 +36,11 @@ infra/
     ├── versions.tf        # terraform + provider version pins
     ├── backend.tf         # S3 backend (native locking)
     ├── providers.tf       # aws provider + default_tags
-    ├── variables.tf       # region, repo, instance_type, bucket names, alert_email, ssm_parameters
+    ├── variables.tf       # region, repo, instance_type, bucket names, alert_email
     ├── data.tf            # caller identity, default VPC, AL2023 arm64 AMI
     ├── network.tf         # egress-only security group
-    ├── iam.tf             # instance role + profile (SSM core, read SSM params, KMS decrypt, read artifacts)
-    ├── secrets.tf         # SSM Parameter Store entries (placeholder values, ignore_changes)
+    ├── iam.tf             # instance role + profile (SSM core, read the config secret, KMS decrypt, read artifacts)
+    ├── secrets.tf         # one Secrets Manager secret (JSON), placeholder value, ignore_changes
     ├── artifacts.tf       # S3 artifact bucket (versioned, lifecycle-expired, private)
     ├── compute.tf         # EC2 instance + user_data
     ├── alarms.tf          # SNS topic + StatusCheckFailed alarm (+ EC2 auto-recover) + AWS Budget
@@ -236,21 +236,6 @@ variable "alert_email" {
   type        = string
   description = "Email to subscribe to the SNS alerts topic."
 }
-
-variable "ssm_parameters" {
-  description = "App env vars stored in SSM Parameter Store. secure=true => SecureString."
-  type        = map(object({ secure = bool }))
-  default = {
-    TELEGRAM_BOT_TOKEN       = { secure = true }
-    SUPABASE_URL             = { secure = false }
-    SUPABASE_SECRET_KEY      = { secure = true }
-    OPENAI_API_KEY           = { secure = true }
-    OPENAI_MODEL             = { secure = false }
-    OPENAI_TTS_MODEL         = { secure = false }
-    WHITELISTED_TELEGRAM_IDS = { secure = false }
-    PORT                     = { secure = false }
-  }
-}
 ```
 
 - [ ] **Step 5: Write `infra/prod/data.tf`**
@@ -358,17 +343,15 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
 
 data "aws_iam_policy_document" "runtime" {
   statement {
-    sid     = "ReadConfigParams"
-    actions = ["ssm:GetParametersByPath", "ssm:GetParameters", "ssm:GetParameter"]
-    resources = [
-      "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/kbot/prod/*",
-    ]
+    sid       = "ReadConfigSecret"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.config.arn]
   }
 
   statement {
-    sid       = "DecryptSecureStrings"
+    sid       = "DecryptSecrets"
     actions   = ["kms:Decrypt"]
-    resources = ["*"] # the AWS-managed SSM key; scope to a CMK ARN if you create one
+    resources = ["*"] # the AWS-managed Secrets Manager key; scope to a CMK ARN if you create one
   }
 
   statement {
@@ -399,31 +382,51 @@ Expected: valid (references `aws_s3_bucket.artifacts` from Task 6 — if validat
 
 ```bash
 git add infra/prod/iam.tf
-git commit -m "infra(prod): instance IAM role/profile — SSM core, read SSM params, KMS decrypt, read artifacts"
+git commit -m "infra(prod): instance IAM role/profile — SSM core, read config secret, KMS decrypt, read artifacts"
 ```
 
 ---
 
-### Task 5: Secrets — SSM Parameter Store entries
+### Task 5: Secrets — one Secrets Manager secret (JSON)
 
 **Files:**
 - Create: `infra/prod/secrets.tf`
 
+All app config is stored as a single JSON secret (`kbot/prod/config`) — ~$0.40/mo total, vs ~$0.40 *per key*. Real values are written out-of-band; `ignore_changes` keeps Terraform from reverting them and keeps real values out of state. `recovery_window_in_days = 0` lets `terraform destroy` remove the secret immediately (clean per-project teardown, no 7–30 day name-reservation window).
+
 - [ ] **Step 1: Write `infra/prod/secrets.tf`**
 
 ```hcl
-# Declare the parameters in Terraform but NEVER store real values in state.
-# Values are populated out-of-band with `aws ssm put-parameter` (see Task 10);
-# ignore_changes means Terraform won't read or overwrite the real value.
-resource "aws_ssm_parameter" "config" {
-  for_each = var.ssm_parameters
+# A single Secrets Manager secret holding ALL app config as a JSON object
+# (one secret => ~$0.40/mo, vs ~$0.40 PER key). Real values are set out-of-band
+# with `aws secretsmanager put-secret-value` (see Task 10); ignore_changes
+# on secret_string means Terraform won't read or overwrite the real values.
+resource "aws_secretsmanager_secret" "config" {
+  name        = "kbot/prod/config"
+  description = "All env config for the kbot prod bot (JSON)."
 
-  name  = "/kbot/prod/${each.key}"
-  type  = each.value.secure ? "SecureString" : "String"
-  value = "PLACEHOLDER"
+  # Delete immediately on `terraform destroy` (no 7-30 day recovery window),
+  # so the project — including its secret — tears down cleanly and can be re-created.
+  recovery_window_in_days = 0
+}
+
+# Seed a placeholder version so the secret is immediately readable. The real
+# values are written out-of-band; ignore_changes keeps Terraform from reverting them.
+resource "aws_secretsmanager_secret_version" "config" {
+  secret_id = aws_secretsmanager_secret.config.id
+  secret_string = jsonencode({
+    TELEGRAM_BOT_TOKEN       = "PLACEHOLDER"
+    SUPABASE_URL             = "PLACEHOLDER"
+    SUPABASE_SECRET_KEY      = "PLACEHOLDER"
+    OPENAI_API_KEY           = "PLACEHOLDER"
+    OPENAI_MODEL             = "gpt-4.1-mini"
+    OPENAI_TTS_MODEL         = "gpt-4o-mini-tts"
+    WHITELISTED_TELEGRAM_IDS = "PLACEHOLDER"
+    PORT                     = "3000"
+  })
 
   lifecycle {
-    ignore_changes = [value]
+    ignore_changes = [secret_string]
   }
 }
 ```
@@ -437,7 +440,7 @@ Expected: valid.
 
 ```bash
 git add infra/prod/secrets.tf
-git commit -m "infra(prod): SSM Parameter Store entries (placeholders; values set out-of-band)"
+git commit -m "infra(prod): Secrets Manager JSON config secret (placeholder; value set out-of-band)"
 ```
 
 ---
@@ -546,7 +549,7 @@ resource "aws_instance" "kbot" {
 set -euxo pipefail
 
 # --- Node 22 (arm64) + tooling ---
-dnf install -y nodejs22 nodejs22-npm tar gzip awscli || dnf install -y nodejs npm tar gzip
+dnf install -y nodejs22 nodejs22-npm tar gzip jq awscli || dnf install -y nodejs npm tar gzip jq
 # AL2023 ships Node via dnf; if the versioned package name differs, fall back to the default.
 ln -sf "$(command -v node)" /usr/local/bin/node || true
 
@@ -570,10 +573,10 @@ tar -xzf "/tmp/kbot-$SHA.tgz" -C "$REL"
 cd "$REL"
 npm ci --omit=dev
 
-# render /opt/kbot/.env from SSM Parameter Store (decrypted)
-aws ssm get-parameters-by-path --path /kbot/prod --with-decryption \
-  --query 'Parameters[].[Name,Value]' --output text --region "$REGION" \
-  | awk -F'\t' '{ n=$1; sub(".*/","",n); print n"="$2 }' > /opt/kbot/.env
+# render /opt/kbot/.env from the Secrets Manager JSON secret
+aws secretsmanager get-secret-value --secret-id kbot/prod/config --region "$REGION" \
+  --query SecretString --output text \
+  | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /opt/kbot/.env
 chmod 600 /opt/kbot/.env
 chown kbot:kbot /opt/kbot/.env
 
@@ -844,26 +847,36 @@ github_repo          = "chuasonglin1995/dotoree-kbot"
 ```bash
 cd infra/prod
 terraform init      # configures the S3 backend created in Task 1
-terraform plan      # review: ~1 instance, SG, IAM, SSM params, S3, alarms, OIDC
+terraform plan      # review: ~1 instance, SG, IAM, Secrets Manager secret, S3, alarms, OIDC
 terraform apply     # type yes
 ```
 Expected: outputs `instance_id`, `artifact_bucket`, `deploy_role_arn`, `region`. Confirm the SNS email subscription (check inbox, click confirm).
 
-- [ ] **Step 3: (HUMAN) Populate the real secret values**
+- [ ] **Step 3: (HUMAN) Populate the real secret value**
 
-For each parameter, set the real value (this never touches Terraform state):
+Write all config as one JSON object into the secret (this never touches Terraform state). Put the real values in a local `secrets.json` (gitignored — `*.tgz`/`.env` are ignored, but **do not commit this file**) and load it with `file://` to avoid shell-history/quoting issues:
 ```bash
-R=ap-southeast-1
-aws ssm put-parameter --region $R --overwrite --name /kbot/prod/TELEGRAM_BOT_TOKEN       --type SecureString --value 'REAL_TOKEN'
-aws ssm put-parameter --region $R --overwrite --name /kbot/prod/SUPABASE_URL             --type String       --value 'https://xxxx.supabase.co'
-aws ssm put-parameter --region $R --overwrite --name /kbot/prod/SUPABASE_SECRET_KEY      --type SecureString --value 'REAL_KEY'
-aws ssm put-parameter --region $R --overwrite --name /kbot/prod/OPENAI_API_KEY           --type SecureString --value 'REAL_KEY'
-aws ssm put-parameter --region $R --overwrite --name /kbot/prod/OPENAI_MODEL             --type String       --value 'gpt-4.1-mini'
-aws ssm put-parameter --region $R --overwrite --name /kbot/prod/OPENAI_TTS_MODEL         --type String       --value 'gpt-4o-mini-tts'
-aws ssm put-parameter --region $R --overwrite --name /kbot/prod/WHITELISTED_TELEGRAM_IDS --type String       --value '123,456'
-aws ssm put-parameter --region $R --overwrite --name /kbot/prod/PORT                     --type String       --value '3000'
+cat > /tmp/kbot-secret.json <<'JSON'
+{
+  "TELEGRAM_BOT_TOKEN": "REAL_PROD_BOT_TOKEN",
+  "SUPABASE_URL": "https://xxxx.supabase.co",
+  "SUPABASE_SECRET_KEY": "REAL_SUPABASE_SECRET",
+  "OPENAI_API_KEY": "REAL_OPENAI_KEY",
+  "OPENAI_MODEL": "gpt-4.1-mini",
+  "OPENAI_TTS_MODEL": "gpt-4o-mini-tts",
+  "WHITELISTED_TELEGRAM_IDS": "123456789,987654321",
+  "PORT": "3000"
+}
+JSON
+
+aws secretsmanager put-secret-value --region ap-southeast-1 \
+  --secret-id kbot/prod/config \
+  --secret-string file:///tmp/kbot-secret.json
+
+rm -f /tmp/kbot-secret.json   # don't leave secrets on disk
 ```
 > Use a **separate bot token from your local dev** (ADR 0001: one instance per token).
+> Verify (names only, no secret values): `aws secretsmanager get-secret-value --secret-id kbot/prod/config --region ap-southeast-1 --query SecretString --output text | jq 'keys'`
 
 - [ ] **Step 4: (HUMAN) Build + upload a first artifact, then deploy via SSM**
 
@@ -1045,7 +1058,7 @@ Confirm the bot recovers. Then redeploy latest (re-run the Action) to return to 
 - Terraform S3 state + native locking → Task 1, Task 2 (`backend.tf`). ✅
 - Public subnet + public IP + egress-only SG, **no NAT** → Task 3 (default VPC auto-assigns public IP in default subnets). ✅ (Corrected the design's "443-only" to all-egress because DNS/dnf need more than 443; noted inline.)
 - AL2023 arm64 + Node 22 + non-root `kbot` + systemd hardening + correct `WorkingDirectory` → Task 7. ✅
-- SSM Parameter Store secrets rendered into `EnvironmentFile`; instance role scoped → Task 4, Task 5, Task 7 (`deploy.sh`). ✅
+- Secrets Manager (single JSON secret) rendered into `EnvironmentFile`; instance role scoped to the secret ARN → Task 4, Task 5, Task 7 (`deploy.sh`). ✅
 - Build-in-CI + artifact + release dirs + `current` symlink rollback → Task 7 (`deploy.sh`), Task 11, Task 12. ✅
 - GitHub OIDC provider + deploy role + Actions → S3 → SSM → Task 9, Task 11. ✅
 - Deep `/healthz` self-heal via systemd timer; `StatusCheckFailed` alarm; journald (default) → Task 7, Task 8. ✅ (journald retention cap `SystemMaxUse` not set — see deliberate cut below.)
@@ -1059,7 +1072,7 @@ Confirm the bot recovers. Then redeploy latest (re-run the Action) to return to 
 - **EC2 Instance Connect break-glass** — works out-of-the-box on AL2023 without extra Terraform (ephemeral keys, no standing port); documented as the fallback in the design doc. No resource needed unless you want to restrict it.
 - **Observability stack** (Prometheus/Grafana/CloudWatch metrics) — explicitly deferred per ADR 0002.
 
-**Placeholder scan:** the only literal `"PLACEHOLDER"` is the intentional SSM parameter value (overwritten out-of-band in Task 10) — not a plan gap. Bucket names / account-specific values are parameterized via variables/tfvars.
+**Placeholder scan:** the only literal `"PLACEHOLDER"` values are in the secret's seeded JSON (overwritten out-of-band in Task 10) — not a plan gap. Bucket names / account-specific values are parameterized via variables/tfvars.
 
 **Consistency check:** region (`ap-southeast-1`), bucket names, `/kbot/prod/` SSM prefix, `/opt/kbot` paths, and the `kbot-<sha>.tgz` artifact name are identical across `user_data.sh.tpl` (`deploy.sh`), the workflow, and the manual commands. The `${GITHUB_SHA::7}` short-SHA in CI matches the `git rev-parse --short HEAD` used in the Task 10 manual deploy.
 

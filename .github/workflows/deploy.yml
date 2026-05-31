@@ -17,6 +17,7 @@ env:
   ARTIFACT_BUCKET: dotoree-kbot-artifacts
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::892532234259:role/kbot-github-deploy
   INSTANCE_NAME: kbot-prod   # the EC2 Name tag; looked up at deploy time
+  SUPABASE_PROJECT_REF: egpazgiozumbnvstkwap   # not secret; in the public project URL
 
 jobs:
   build-and-deploy:
@@ -55,6 +56,23 @@ jobs:
 
       - name: Upload artifact to S3
         run: aws s3 cp "kbot-${GITHUB_SHA::7}.tgz" "s3://${ARTIFACT_BUCKET}/"
+
+      # Apply DB migrations BEFORE restarting the app, so the new code finds the
+      # schema it expects. A failed migration fails the job and the SSM deploy
+      # below never runs (artifact is uploaded but the bot is not restarted).
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: latest
+          github-token: ${{ github.token }}
+
+      - name: Apply database migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase db push --yes
 
       - name: Trigger deploy via SSM
         run: |

@@ -8,11 +8,12 @@ resource "aws_sns_topic_subscription" "email" {
   endpoint  = var.alert_email
 }
 
-# Host-level failure: alert + EC2 auto-recover.
+# Host-level (system/hardware) failure: alert + EC2 auto-recover.
+# The 'recover' action is only valid on StatusCheckFailed_System (not the combined metric).
 resource "aws_cloudwatch_metric_alarm" "status_check_failed" {
-  alarm_name          = "${var.project}-status-check-failed"
+  alarm_name          = "${var.project}-status-check-failed-system"
   namespace           = "AWS/EC2"
-  metric_name         = "StatusCheckFailed"
+  metric_name         = "StatusCheckFailed_System"
   dimensions          = { InstanceId = aws_instance.kbot.id }
   statistic           = "Maximum"
   period              = 60

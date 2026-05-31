@@ -3,7 +3,7 @@
 # with `aws secretsmanager put-secret-value` (see plan Task 10); ignore_changes
 # on secret_string means Terraform won't read or overwrite the real values.
 resource "aws_secretsmanager_secret" "config" {
-  name        = "kbot/prod/config"
+  name        = "dotoree_kbot-prod"
   description = "All env config for the kbot prod bot (JSON)."
 
   # Delete immediately on `terraform destroy` (no 7-30 day recovery window),

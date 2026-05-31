@@ -27,7 +27,7 @@ cd "$REL"
 npm ci --omit=dev
 
 # render /opt/kbot/.env from the Secrets Manager JSON secret
-aws secretsmanager get-secret-value --secret-id kbot/prod/config --region "$REGION" \
+aws secretsmanager get-secret-value --secret-id dotoree_kbot-prod --region "$REGION" \
   --query SecretString --output text \
   | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /opt/kbot/.env
 chmod 600 /opt/kbot/.env

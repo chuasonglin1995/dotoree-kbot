@@ -20,7 +20,7 @@
 - State bucket: `dotoree-kbot-tfstate` — **S3 bucket names are globally unique; if taken, change everywhere.**
 - Artifact bucket: `dotoree-kbot-artifacts` — same caveat.
 - GitHub repo: `chuasonglin1995/dotoree-kbot`.
-- Secrets Manager secret id: `kbot/prod/config` (one secret, JSON body of all env vars).
+- Secrets Manager secret id: `dotoree_kbot-prod` (one secret, JSON body of all env vars).
 - App dir on box: `/opt/kbot` (releases in `/opt/kbot/releases/<sha>`, symlinked `current`).
 
 ---
@@ -392,7 +392,7 @@ git commit -m "infra(prod): instance IAM role/profile — SSM core, read config 
 **Files:**
 - Create: `infra/prod/secrets.tf`
 
-All app config is stored as a single JSON secret (`kbot/prod/config`) — ~$0.40/mo total, vs ~$0.40 *per key*. Real values are written out-of-band; `ignore_changes` keeps Terraform from reverting them and keeps real values out of state. `recovery_window_in_days = 0` lets `terraform destroy` remove the secret immediately (clean per-project teardown, no 7–30 day name-reservation window).
+All app config is stored as a single JSON secret (`dotoree_kbot-prod`) — ~$0.40/mo total, vs ~$0.40 *per key*. Real values are written out-of-band; `ignore_changes` keeps Terraform from reverting them and keeps real values out of state. `recovery_window_in_days = 0` lets `terraform destroy` remove the secret immediately (clean per-project teardown, no 7–30 day name-reservation window).
 
 - [ ] **Step 1: Write `infra/prod/secrets.tf`**
 
@@ -402,7 +402,7 @@ All app config is stored as a single JSON secret (`kbot/prod/config`) — ~$0.40
 # with `aws secretsmanager put-secret-value` (see Task 10); ignore_changes
 # on secret_string means Terraform won't read or overwrite the real values.
 resource "aws_secretsmanager_secret" "config" {
-  name        = "kbot/prod/config"
+  name        = "dotoree_kbot-prod"
   description = "All env config for the kbot prod bot (JSON)."
 
   # Delete immediately on `terraform destroy` (no 7-30 day recovery window),
@@ -574,7 +574,7 @@ cd "$REL"
 npm ci --omit=dev
 
 # render /opt/kbot/.env from the Secrets Manager JSON secret
-aws secretsmanager get-secret-value --secret-id kbot/prod/config --region "$REGION" \
+aws secretsmanager get-secret-value --secret-id dotoree_kbot-prod --region "$REGION" \
   --query SecretString --output text \
   | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /opt/kbot/.env
 chmod 600 /opt/kbot/.env
@@ -870,13 +870,13 @@ cat > /tmp/kbot-secret.json <<'JSON'
 JSON
 
 aws secretsmanager put-secret-value --region ap-southeast-1 \
-  --secret-id kbot/prod/config \
+  --secret-id dotoree_kbot-prod \
   --secret-string file:///tmp/kbot-secret.json
 
 rm -f /tmp/kbot-secret.json   # don't leave secrets on disk
 ```
 > Use a **separate bot token from your local dev** (ADR 0001: one instance per token).
-> Verify (names only, no secret values): `aws secretsmanager get-secret-value --secret-id kbot/prod/config --region ap-southeast-1 --query SecretString --output text | jq 'keys'`
+> Verify (names only, no secret values): `aws secretsmanager get-secret-value --secret-id dotoree_kbot-prod --region ap-southeast-1 --query SecretString --output text | jq 'keys'`
 
 - [ ] **Step 4: (HUMAN) Build + upload a first artifact, then deploy via SSM**
 

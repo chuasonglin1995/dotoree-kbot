@@ -23,7 +23,7 @@ push to main
                           → repoint /opt/kbot/current symlink → systemctl restart kbot
 ```
 
-Config/secrets live in one AWS Secrets Manager secret (`kbot/prod/config`, a JSON object).
+Config/secrets live in one AWS Secrets Manager secret (`dotoree_kbot-prod`, a JSON object).
 DB is external (Supabase). Audio cache is local + regenerable.
 
 ## Layout
@@ -143,7 +143,7 @@ cat > /tmp/kbot-secret.json <<'JSON'
 }
 JSON
 aws secretsmanager put-secret-value --region ap-southeast-1 \
-  --secret-id kbot/prod/config --secret-string file:///tmp/kbot-secret.json
+  --secret-id dotoree_kbot-prod --secret-string file:///tmp/kbot-secret.json
 rm -f /tmp/kbot-secret.json
 
 # apply now without a code change:
@@ -152,7 +152,7 @@ aws ssm start-session --region ap-southeast-1 --target "$IID"   # then on box: s
 
 Notes:
 - Use a **separate bot token from local dev** — only one instance may poll a token (ADR 0001).
-- Inspect keys (not values): `aws secretsmanager get-secret-value --secret-id kbot/prod/config --region ap-southeast-1 --query SecretString --output text | jq 'keys'`
+- Inspect keys (not values): `aws secretsmanager get-secret-value --secret-id dotoree_kbot-prod --region ap-southeast-1 --query SecretString --output text | jq 'keys'`
 - Real values never touch Terraform state or git (Terraform seeds a placeholder and `ignore_changes`).
 
 ## Monitoring
